@@ -664,11 +664,26 @@ struct AccountCardView: View {
     private var compactUsageRows: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(displayName)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(displayName)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    if shouldShowShortHorizonLock(for: account), let window = account.fiveHourWindow {
+                        HStack(alignment: .firstTextBaseline, spacing: 3) {
+                            Image(systemName: "lock.fill")
+                            Text(formatCountdown(window.resetsAt))
+                                .lineLimit(1)
+                        }
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .fixedSize(horizontal: true, vertical: false)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("5-hour limit reached, resets in \(formatCountdown(window.resetsAt))")
+                    }
+                }
 
                 Spacer(minLength: 8)
 
