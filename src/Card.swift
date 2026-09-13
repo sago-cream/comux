@@ -670,6 +670,14 @@ struct AccountCardView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
 
+                if shouldShowShortHorizonLock(for: account), let window = account.fiveHourWindow {
+                    Label(formatCountdown(window.resetsAt), systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .accessibilityLabel("5-hour limit reached, resets in \(formatCountdown(window.resetsAt))")
+                }
+
                 Spacer(minLength: 8)
 
                 self.usageHeadlineLabel
