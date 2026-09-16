@@ -400,6 +400,11 @@ func isUsageWindowLocked(_ window: UsageWindow) -> Bool {
     window.available && remainingPercentage(for: window) == 0 && !hasJustReset(window)
 }
 
+func isAccountUsageLocked(_ account: AccountSnapshot) -> Bool {
+    isUsageWindowLocked(account.primaryUsageWindow)
+        || account.fiveHourWindow.map { isUsageWindowLocked($0) } == true
+}
+
 func shouldShowShortHorizonLock(for account: AccountSnapshot) -> Bool {
     guard let fiveHourWindow = account.fiveHourWindow else {
         return false
