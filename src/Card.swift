@@ -650,7 +650,7 @@ struct AccountCardView: View {
     private var cardContent: some View {
         UsageSurfaceView(
             window: primaryWindow,
-            isLocked: isUsageWindowLocked(primaryWindow),
+            isLocked: isAccountUsageLocked(account),
             isActive: account.isCurrentSystemAccount == true,
             isHovered: isHovered,
             topCornerRadius: accountCardCornerRadius,

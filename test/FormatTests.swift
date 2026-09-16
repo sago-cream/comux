@@ -159,6 +159,7 @@ final class FormatTests: XCTestCase {
         )
 
         XCTAssertFalse(shouldShowShortHorizonLock(for: account))
+        XCTAssertTrue(isAccountUsageLocked(account))
     }
 
     func testShortHorizonLockStillShowsWhenPrimaryUsageRemains() {
@@ -192,6 +193,33 @@ final class FormatTests: XCTestCase {
         )
 
         XCTAssertTrue(shouldShowShortHorizonLock(for: account))
+        XCTAssertTrue(isAccountUsageLocked(account))
+    }
+
+    func testAccountLockIgnoresUnavailableAndResetFiveHourWindows() {
+        for (available, usedPercent, resetAt) in [
+            (true, 75.0, "2099-06-15T05:00:00Z"),
+            (false, 100.0, "2099-06-15T05:00:00Z"),
+            (true, 100.0, "2000-06-15T05:00:00Z"),
+        ] {
+            let account = AccountSnapshot(
+                accountId: "account", label: "Account", email: "account@example.com",
+                workspaceId: nil, workspaceLabel: "Personal", plan: "Codex Pro",
+                source: "test", systemAuthProfileId: nil, isCurrentSystemAccount: false,
+                lastSyncedAt: "2026-06-15T00:00:00Z",
+                weeklyWindow: UsageWindow(
+                    available: true, label: "Weekly window", usedMinutes: 40,
+                    limitMinutes: 100, usedPercentage: 40, resetsAt: "2099-06-22T00:00:00Z"
+                ),
+                rollingWindow: UsageWindow(
+                    available: available, label: "Rolling 5-hour window", usedMinutes: Int(usedPercent),
+                    limitMinutes: 100, usedPercentage: usedPercent, resetsAt: resetAt
+                )
+            )
+
+            XCTAssertFalse(isAccountUsageLocked(account))
+            XCTAssertFalse(shouldShowShortHorizonLock(for: account))
+        }
     }
 
     func testMenuBarUsageTextAutomaticallyUsesFiveHourWindowWhenPresent() {
