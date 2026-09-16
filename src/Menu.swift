@@ -406,6 +406,7 @@ struct SlimDashboardPanelView: View {
     let onAddAccountRequested: () -> Void
     let onEditDisplayNameRequested: (AccountSnapshot) -> Void
     let onRemoveRequested: (AccountSnapshot) -> Void
+    var manualLockStore: ManualUsageLockStore = .shared
     @State private var hoveredControlRowID: String?
 
     private var needsScrollView: Bool {
@@ -476,7 +477,8 @@ struct SlimDashboardPanelView: View {
                     },
                     onRemove: {
                         self.promptForRemoval(row.account)
-                    }
+                    },
+                    manualLockStore: manualLockStore
                 )
             }
         }

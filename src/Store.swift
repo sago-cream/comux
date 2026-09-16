@@ -243,3 +243,40 @@ final class DisplayNameStore: ObservableObject {
         self.persistDisplayNames(nextDisplayNames)
     }
 }
+
+@MainActor
+final class ManualUsageLockStore: ObservableObject {
+    static let shared = ManualUsageLockStore()
+    @Published private(set) var deadlines: [String: Double]
+    private let defaults: UserDefaults
+    private static let defaultsKey = "manualFiveHourLocks"
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.deadlines = defaults.dictionary(forKey: Self.defaultsKey) as? [String: Double] ?? [:]
+    }
+
+    func deadline(for account: AccountSnapshot, now: Date = Date()) -> Date? {
+        guard let epoch = deadlines[AccountIdentity.key(for: account).storageKey],
+              epoch > now.timeIntervalSince1970 else { return nil }
+        return Date(timeIntervalSince1970: epoch)
+    }
+
+    func availableReset(for account: AccountSnapshot, now: Date = Date()) -> Date? {
+        guard let window = account.fiveHourWindow,
+              let reset = parseISO8601Date(window.resetsAt), reset > now else { return nil }
+        return reset
+    }
+
+    func lock(_ account: AccountSnapshot, now: Date = Date()) {
+        guard let reset = availableReset(for: account, now: now) else { return }
+        deadlines = deadlines.filter { $0.value > now.timeIntervalSince1970 }
+        deadlines[AccountIdentity.key(for: account).storageKey] = reset.timeIntervalSince1970
+        defaults.set(deadlines, forKey: Self.defaultsKey)
+    }
+
+    func unlock(_ account: AccountSnapshot) {
+        deadlines.removeValue(forKey: AccountIdentity.key(for: account).storageKey)
+        defaults.set(deadlines, forKey: Self.defaultsKey)
+    }
+}

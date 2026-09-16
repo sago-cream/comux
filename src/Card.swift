@@ -508,11 +508,15 @@ private struct AccountCardMenuTrigger: NSViewRepresentable {
     let onEditDisplayName: () -> Void
     let onRemove: () -> Void
     let onHoverChanged: (Bool) -> Void
+    let manualLockDeadline: Date?
+    let manualLockReset: Date?
+    let onToggleManualLock: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
             onEditDisplayName: onEditDisplayName,
-            onRemove: onRemove
+            onRemove: onRemove,
+            onToggleManualLock: onToggleManualLock
         )
     }
 
@@ -521,6 +525,8 @@ private struct AccountCardMenuTrigger: NSViewRepresentable {
         view.coordinator = context.coordinator
         view.onHoverChanged = onHoverChanged
         view.canRemove = canRemove
+        view.manualLockDeadline = manualLockDeadline
+        view.manualLockReset = manualLockReset
         return view
     }
 
@@ -530,22 +536,32 @@ private struct AccountCardMenuTrigger: NSViewRepresentable {
         nsView.coordinator = context.coordinator
         nsView.onHoverChanged = onHoverChanged
         nsView.canRemove = canRemove
+        nsView.manualLockDeadline = manualLockDeadline
+        nsView.manualLockReset = manualLockReset
+        context.coordinator.onToggleManualLock = onToggleManualLock
     }
 
     final class Coordinator: NSObject {
         var onEditDisplayName: () -> Void
         var onRemove: () -> Void
+        var onToggleManualLock: () -> Void
 
         init(
             onEditDisplayName: @escaping () -> Void,
-            onRemove: @escaping () -> Void
+            onRemove: @escaping () -> Void,
+            onToggleManualLock: @escaping () -> Void
         ) {
             self.onEditDisplayName = onEditDisplayName
             self.onRemove = onRemove
+            self.onToggleManualLock = onToggleManualLock
         }
 
         @objc func handleEditDisplayName() {
             self.onEditDisplayName()
+        }
+
+        @objc func handleToggleManualLock() {
+            self.onToggleManualLock()
         }
 
         @objc func handleRemove() {
@@ -557,6 +573,8 @@ private struct AccountCardMenuTrigger: NSViewRepresentable {
         weak var coordinator: Coordinator?
         var onHoverChanged: ((Bool) -> Void)?
         var canRemove = false
+        var manualLockDeadline: Date?
+        var manualLockReset: Date?
         private var trackingArea: NSTrackingArea?
 
         override func updateTrackingAreas() {
@@ -593,6 +611,19 @@ private struct AccountCardMenuTrigger: NSViewRepresentable {
             }
 
             let menu = NSMenu()
+            menu.autoenablesItems = false
+            let now = Date()
+            let isManuallyLocked = manualLockDeadline.map { $0 > now } ?? false
+            let lockItem = NSMenuItem(
+                title: isManuallyLocked ? "Unlock" : "Lock until 5h reset",
+                action: #selector(Coordinator.handleToggleManualLock),
+                keyEquivalent: ""
+            )
+            lockItem.target = coordinator
+            lockItem.isEnabled = isManuallyLocked || (manualLockReset.map { $0 > now } ?? false)
+            menu.addItem(lockItem)
+            menu.addItem(.separator())
+
 
             let editItem = NSMenuItem(
                 title: "Edit Display Name…",
@@ -628,6 +659,8 @@ struct AccountCardView: View {
     let canRemove: Bool
     let onEditDisplayName: () -> Void
     let onRemove: () -> Void
+    @ObservedObject var manualLockStore: ManualUsageLockStore = .shared
+    @State private var now = Date()
     @State private var isHovered = false
     private let contentInsets = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
 
@@ -645,12 +678,25 @@ struct AccountCardView: View {
         .overlay {
             self.cardMenuTrigger
         }
+        .onAppear { self.now = Date() }
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now in
+            self.now = now
+        }
+    }
+
+    private var manualLockDeadline: Date? {
+        manualLockStore.deadline(for: account, now: now)
+    }
+
+    private var lockCountdown: String? {
+        if let deadline = manualLockDeadline { return deadline.ISO8601Format() }
+        return shouldShowShortHorizonLock(for: account) ? account.fiveHourWindow?.resetsAt : nil
     }
 
     private var cardContent: some View {
         UsageSurfaceView(
             window: primaryWindow,
-            isLocked: isAccountUsageLocked(account),
+            isLocked: manualLockDeadline != nil || isAccountUsageLocked(account),
             isActive: account.isCurrentSystemAccount == true,
             isHovered: isHovered,
             topCornerRadius: accountCardCornerRadius,
@@ -671,17 +717,17 @@ struct AccountCardView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
 
-                    if shouldShowShortHorizonLock(for: account), let window = account.fiveHourWindow {
+                    if let resetAt = lockCountdown {
                         HStack(alignment: .firstTextBaseline, spacing: 3) {
                             Image(systemName: "lock.fill")
-                            Text(formatCountdown(window.resetsAt))
+                            Text(formatCountdown(resetAt, now: now))
                                 .lineLimit(1)
                         }
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(Color.white.opacity(0.5))
                         .fixedSize(horizontal: true, vertical: false)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("5-hour limit reached, resets in \(formatCountdown(window.resetsAt))")
+                        .accessibilityLabel("\(manualLockDeadline != nil ? "Manually locked" : "5-hour limit reached"), resets in \(formatCountdown(resetAt, now: now))")
                     }
                 }
 
@@ -753,6 +799,16 @@ struct AccountCardView: View {
             onRemove: onRemove,
             onHoverChanged: { hovering in
                 self.isHovered = hovering
+            },
+            manualLockDeadline: manualLockDeadline,
+            manualLockReset: manualLockStore.availableReset(for: account, now: now),
+            onToggleManualLock: {
+                if manualLockStore.deadline(for: account) != nil {
+                    manualLockStore.unlock(account)
+                } else {
+                    manualLockStore.lock(account)
+                }
+                now = Date()
             }
         )
     }
