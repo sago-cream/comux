@@ -1,13 +1,11 @@
 import SwiftUI
 
-func parseISO8601Date(_ value: String) -> Date? {
-    let fractionalFormatter = ISO8601DateFormatter()
-    fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = fractionalFormatter.date(from: value) {
-        return date
-    }
+private let fractionalISO8601Style = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+private let wholeSecondsISO8601Style = Date.ISO8601FormatStyle()
 
-    return ISO8601DateFormatter().date(from: value)
+func parseISO8601Date(_ value: String) -> Date? {
+    (try? fractionalISO8601Style.parse(value))
+        ?? (try? wholeSecondsISO8601Style.parse(value))
 }
 
 func formatCountdown(_ value: String, now: Date = Date()) -> String {
@@ -125,8 +123,8 @@ func primaryMenuBarAccount(from accounts: [AccountSnapshot]) -> AccountSnapshot?
                 && menuBarUsageWindow(for: account).available
         })
         .sorted(by: { left, right in
-            let leftDate = ISO8601DateFormatter().date(from: left.lastSyncedAt) ?? .distantPast
-            let rightDate = ISO8601DateFormatter().date(from: right.lastSyncedAt) ?? .distantPast
+            let leftDate = parseISO8601Date(left.lastSyncedAt) ?? .distantPast
+            let rightDate = parseISO8601Date(right.lastSyncedAt) ?? .distantPast
             return leftDate > rightDate
         })
         .first

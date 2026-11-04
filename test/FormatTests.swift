@@ -2,6 +2,30 @@ import XCTest
 @testable import Comux
 
 final class FormatTests: XCTestCase {
+    func testISO8601ParsingSupportsWholeSecondsAndFractionalSecondsWithOffsets() throws {
+        let epoch: TimeInterval = 1_793_793_600
+        let cases: [(String, TimeInterval)] = [
+            ("2026-11-04T12:00:00Z", 0),
+            ("2026-11-04T12:00:00.1Z", 0.1),
+            ("2026-11-04T12:00:00.123456Z", 0.123456),
+            ("2026-11-04T20:00:00+08:00", 0),
+            ("2026-11-04T20:00:00.123+08:00", 0.123),
+            ("2026-11-04T04:00:00-08:00", 0),
+        ]
+
+        for (value, fraction) in cases {
+            let date = try XCTUnwrap(parseISO8601Date(value), value)
+            XCTAssertEqual(date.timeIntervalSince1970, epoch + fraction, accuracy: 0.001, value)
+        }
+    }
+
+    func testInvalidISO8601DatesKeepUnavailableCountdownFallback() {
+        for value in ["", "invalid", "2026-11-04"] {
+            XCTAssertNil(parseISO8601Date(value), value)
+            XCTAssertEqual(formatCountdown(value), "n/a")
+        }
+    }
+
     func testUnavailableUsageWindowShowsNoSeatText() {
         let window = UsageWindow(
             available: false,
